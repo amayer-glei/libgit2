@@ -1,0 +1,77 @@
+# Builds gut.exe for all supported Windows architectures.
+#
+# Every run (tag push or manual dispatch) builds and uploads the binaries
+# as workflow artifacts. Pushing a tag named `gut-*` additionally creates
+# a GitHub release with the binaries attached.
+
+name: gut
+
+on:
+  push:
+    tags:
+      - 'gut-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: gut.exe (windows-${{ matrix.label }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64,   label: x64 }
+          - { arch: Win32, label: x86 }
+          - { arch: ARM64, label: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake -S gut -B gut/build -A ${{ matrix.arch }}
+          cmake --build gut/build --config Release --target gut
+
+      # the x86 build runs on the x64 host via WoW64; the ARM64 build does not
+      - name: Smoke test
+        if: matrix.arch != 'ARM64'
+        shell: pwsh
+        run: gut/build/Release/gut.exe --help
+
+      - name: Stage binary
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory gut/dist | Out-Null
+          Copy-Item gut/build/Release/gut.exe "gut/dist/gut-windows-${{ matrix.label }}.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gut-windows-${{ matrix.label }}
+          path: gut/dist/gut-windows-${{ matrix.label }}.exe
+          if-no-files-found: error
+
+  release:
+    name: Release ${{ github.ref_name }}
+    if: startsWith(github.ref, 'refs/tags/gut-')
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gut-windows-*
+          merge-multiple: true
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            gut-windows-x64.exe gut-windows-x86.exe gut-windows-arm64.exe `
+            --title "${{ github.ref_name }}" `
+            --notes "Standalone gut.exe builds (static libgit2, no dependencies). See [gut/README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/gut/README.md) for usage."

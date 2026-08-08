@@ -76,6 +76,18 @@ produces `gut\build\Release\gut.exe`. The script configures
 links it statically. To cross-compile, configure manually with
 `cmake -S gut -B <builddir> -A Win32|x64|ARM64`.
 
+## Releases
+
+`.github/workflows/gut.yml` builds `gut-windows-x64.exe`,
+`gut-windows-x86.exe` and `gut-windows-arm64.exe` on every manual dispatch,
+and creates a GitHub release with all three binaries whenever a tag named
+`gut-*` is pushed:
+
+```
+git tag gut-v1.0.0
+git push origin gut-v1.0.0
+```
+
 ## Notes & limitations
 
 * Merge commits inside the rebased range are linearized (dropped as
