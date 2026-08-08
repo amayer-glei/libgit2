@@ -11,7 +11,8 @@ DLL dependencies).
 ```
 gut [options]                          amend the last commit (HEAD)
 gut rebase <upstream> [sync options]   fix all commits in <upstream>..HEAD
-gut --rebase <upstream> [sync options] same as above
+gut rebase --root [sync options]       fix the entire branch history
+gut --rebase <upstream> [sync options] same as 'gut rebase <upstream>'
 ```
 
 ### Default: amend HEAD
@@ -62,6 +63,18 @@ committer (naming adapted from git rebase's `--committer-date-is-author-date`):
 * `--sync-name` — sync only name/email; committer timestamp is set to now
   (like a normal rebase)
 
+### Rewriting the whole history: `--root`
+
+`gut rebase --root` rewrites **every** commit reachable from HEAD,
+including the root commit. Since nothing is replayed onto a new base,
+trees and merge commits are preserved exactly — only the metadata
+changes. Commits that are already synced are content-identical after
+rewriting, so re-running `gut rebase --root` is a no-op ("up to date").
+
+`gut rebase --root <upstream>` instead replays the entire history onto
+the given target, matching `git rebase --root <onto>` (this linearizes
+merge commits, like the plain rebase mode).
+
 ## Build
 
 Requires Visual Studio (or Build Tools) 2022+; uses the CMake bundled with
@@ -92,6 +105,7 @@ git push origin gut-v1.0.0
 
 * Merge commits inside the rebased range are linearized (dropped as
   merges), same as a plain `git rebase` without `--rebase-merges`.
+  Exception: `gut rebase --root` without a target preserves them.
 * Commit messages, GPG signatures and trees are preserved as-is; only the
   author/committer identity lines change. Signed commits lose their valid
   signature by definition (the content changes).
