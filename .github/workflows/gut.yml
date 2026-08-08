@@ -32,7 +32,7 @@ jobs:
           - { os: windows-latest, arch: ARM64, label: windows-arm64, test: false }
           - { os: ubuntu-latest,               label: linux-x64,     test: true }
           - { os: macos-latest,                label: macos-arm64,   test: true }
-          - { os: macos-13,                    label: macos-x64,     test: true }
+          - { os: macos-15-intel,              label: macos-x64,     test: true }
     steps:
       - uses: actions/checkout@v4
 
