@@ -1,4 +1,5 @@
 /build/
+/gut/build/
 .DS_Store
 *~
 .*.swp
