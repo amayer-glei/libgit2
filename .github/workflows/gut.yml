@@ -4,8 +4,8 @@
 # Every run (tag push or manual dispatch) builds the binaries, runs the
 # full test suite (skipped only for Windows ARM64, which cannot execute
 # on the x64 build host) and uploads the binaries as workflow artifacts.
-# Pushing a tag named `gut-*` additionally creates a GitHub release with
-# all binaries attached.
+# Pushing a tag named `gut-*` creates a release with all binaries; a
+# manual dispatch can do the same by enabling `create_release`.
 
 name: gut
 
@@ -14,6 +14,16 @@ on:
     tags:
       - 'gut-*'
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release with the built binaries'
+        type: boolean
+        required: false
+        default: false
+      release_name:
+        description: 'Release/tag name, e.g. gut-v1.0.0 (required when create_release is enabled)'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -76,8 +86,8 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Release ${{ github.ref_name }}
-    if: startsWith(github.ref, 'refs/tags/gut-')
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/gut-') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -93,6 +103,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" gut-* \
-            --title "${{ github.ref_name }}" \
-            --notes "Standalone gut builds (static libgit2, no dependencies). See [gut/README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/gut/README.md) for usage."
+          TAG="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.release_name }}"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "a release_name is required when create_release is enabled"
+            exit 1
+          fi
+          gh release create "$TAG" gut-* \
+            --title "$TAG" \
+            --notes "Standalone gut builds (static libgit2, no dependencies). See [gut/README.md](https://github.com/${{ github.repository }}/blob/$TAG/gut/README.md) for usage."

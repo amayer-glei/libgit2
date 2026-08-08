@@ -118,13 +118,16 @@ pwsh gut/tests/test-gut.ps1
 `.github/workflows/gut.yml` builds `gut-windows-x64.exe`,
 `gut-windows-x86.exe`, `gut-windows-arm64.exe`, `gut-linux-x64`,
 `gut-macos-arm64` and `gut-macos-x64` on every manual dispatch (running
-the test suite on each platform), and creates a GitHub release with all
-binaries whenever a tag named `gut-*` is pushed:
+the test suite on each platform). A GitHub release with all binaries is
+created either by pushing a tag named `gut-*`:
 
 ```
 git tag gut-v1.0.0
 git push origin gut-v1.0.0
 ```
+
+or from a manual dispatch by enabling `create_release` and setting
+`release_name` (e.g. `gut-v1.0.0`).
 
 ## Notes & limitations
 
