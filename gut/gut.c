@@ -26,6 +26,28 @@
 #endif
 
 /*
+ * Portability shims: MSVC spells the time functions _mkgmtime and
+ * localtime_s (with swapped arguments), POSIX has timegm/localtime_r.
+ */
+static time_t gut_timegm(struct tm *tmv)
+{
+#ifdef _WIN32
+	return _mkgmtime(tmv);
+#else
+	return timegm(tmv);
+#endif
+}
+
+static int gut_localtime(struct tm *out, const time_t *t)
+{
+#ifdef _WIN32
+	return localtime_s(out, t);
+#else
+	return localtime_r(t, out) != NULL ? 0 : -1;
+#endif
+}
+
+/*
  * All text handled here (commit messages, author names, paths) is UTF-8.
  * On Windows consoles, print through WriteConsoleW so non-ASCII text
  * (umlauts, emoji, ...) renders correctly regardless of the console code
@@ -175,9 +197,9 @@ static int local_offset_at(git_time_t t)
 	time_t tt = (time_t)t;
 	struct tm lcl;
 
-	if (localtime_s(&lcl, &tt) != 0)
+	if (gut_localtime(&lcl, &tt) != 0)
 		return 0;
-	return (int)(difftime(_mkgmtime(&lcl), tt) / 60);
+	return (int)(difftime(gut_timegm(&lcl), tt) / 60);
 }
 
 /* parse "+HHMM" / "-HHMM" / "+HH:MM" into minutes */
@@ -291,7 +313,7 @@ static int parse_date(const char *str, git_time_t *time_out, int *offset_out)
 	else if (parse_tz(p, &off) < 0)
 		return -1;
 
-	epoch = (long long)_mkgmtime(&tmv);
+	epoch = (long long)gut_timegm(&tmv);
 	if (epoch == -1)
 		return -1;
 	*time_out = (git_time_t)(epoch - (long long)off * 60);

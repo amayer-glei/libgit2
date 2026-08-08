@@ -1,10 +1,10 @@
 # gut
 
-A lightweight Windows utility based on libgit2 that fixes commit metadata:
+A lightweight utility based on libgit2 that fixes commit metadata:
 it makes the **committer** match the **author** — name, email and timestamp.
 
-Builds to a single self-contained `gut.exe` (static libgit2, static CRT, no
-DLL dependencies).
+Builds to a single self-contained binary on Windows, Linux and macOS
+(static libgit2; no runtime dependencies).
 
 ## Usage
 
@@ -77,6 +77,8 @@ merge commits, like the plain rebase mode).
 
 ## Build
 
+### Windows
+
 Requires Visual Studio (or Build Tools) 2022+; uses the CMake bundled with
 it, nothing else needs to be installed:
 
@@ -84,17 +86,40 @@ it, nothing else needs to be installed:
 gut\build.cmd
 ```
 
-produces `gut\build\Release\gut.exe`. The script configures
-`gut\CMakeLists.txt`, which pulls in libgit2 from the parent directory and
-links it statically. To cross-compile, configure manually with
-`cmake -S gut -B <builddir> -A Win32|x64|ARM64`.
+produces `gut\build\Release\gut.exe`. To cross-compile, configure manually
+with `cmake -S gut -B <builddir> -A Win32|x64|ARM64`.
+
+### Linux / macOS
+
+Requires a C compiler, CMake and the zlib development files
+(`zlib1g-dev` / Xcode command line tools):
+
+```
+sh gut/build.sh
+```
+
+produces `gut/build-unix/gut`.
+
+Both scripts configure `gut\CMakeLists.txt`, which pulls in libgit2 from
+the parent directory and links it statically.
+
+## Tests
+
+`gut/tests/test-gut.ps1` is a cross-platform test suite (40 checks) that
+runs on Windows, Linux and macOS with git and PowerShell 7+ (`pwsh`)
+installed:
+
+```
+pwsh gut/tests/test-gut.ps1
+```
 
 ## Releases
 
 `.github/workflows/gut.yml` builds `gut-windows-x64.exe`,
-`gut-windows-x86.exe` and `gut-windows-arm64.exe` on every manual dispatch,
-and creates a GitHub release with all three binaries whenever a tag named
-`gut-*` is pushed:
+`gut-windows-x86.exe`, `gut-windows-arm64.exe`, `gut-linux-x64`,
+`gut-macos-arm64` and `gut-macos-x64` on every manual dispatch (running
+the test suite on each platform), and creates a GitHub release with all
+binaries whenever a tag named `gut-*` is pushed:
 
 ```
 git tag gut-v1.0.0
@@ -111,7 +136,8 @@ git push origin gut-v1.0.0
   signature by definition (the content changes).
 * `--date` implements a small set of explicit formats, not git's full
   approxidate parser.
-* Unicode-safe: arguments are read as UTF-16 (`wmain`) and console output
-  goes through `WriteConsoleW`, so non-ASCII names and messages (umlauts,
-  emoji) are stored and displayed correctly regardless of the console code
-  page; redirected output is plain UTF-8.
+* Unicode-safe: on Windows, arguments are read as UTF-16 (`wmain`) and
+  console output goes through `WriteConsoleW`, so non-ASCII names and
+  messages (umlauts, emoji) are stored and displayed correctly regardless
+  of the console code page; elsewhere (and when redirected) everything is
+  plain UTF-8.

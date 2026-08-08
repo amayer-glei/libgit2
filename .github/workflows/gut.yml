@@ -1,8 +1,11 @@
-# Builds gut.exe for all supported Windows architectures.
+# Builds gut for Windows (x64/x86/arm64), Linux (x64) and macOS
+# (arm64/x64).
 #
-# Every run (tag push or manual dispatch) builds and uploads the binaries
-# as workflow artifacts. Pushing a tag named `gut-*` additionally creates
-# a GitHub release with the binaries attached.
+# Every run (tag push or manual dispatch) builds the binaries, runs the
+# full test suite (skipped only for Windows ARM64, which cannot execute
+# on the x64 build host) and uploads the binaries as workflow artifacts.
+# Pushing a tag named `gut-*` additionally creates a GitHub release with
+# all binaries attached.
 
 name: gut
 
@@ -17,61 +20,79 @@ permissions:
 
 jobs:
   build:
-    name: gut.exe (windows-${{ matrix.label }})
-    runs-on: windows-latest
+    name: gut-${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { arch: x64,   label: x64 }
-          - { arch: Win32, label: x86 }
-          - { arch: ARM64, label: arm64 }
+          - { os: windows-latest, arch: x64,   label: windows-x64,   test: true }
+          - { os: windows-latest, arch: Win32, label: windows-x86,   test: true }
+          # windows-latest is an x64 host: the ARM64 binary cannot run there
+          - { os: windows-latest, arch: ARM64, label: windows-arm64, test: false }
+          - { os: ubuntu-latest,               label: linux-x64,     test: true }
+          - { os: macos-latest,                label: macos-arm64,   test: true }
+          - { os: macos-13,                    label: macos-x64,     test: true }
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cmake -S gut -B gut/build -A ${{ matrix.arch }}
           cmake --build gut/build --config Release --target gut
 
-      # the x86 build runs on the x64 host via WoW64; the ARM64 build does not
-      - name: Smoke test
-        if: matrix.arch != 'ARM64'
+      - name: Build (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: sh gut/build.sh
+
+      - name: Run test suite
+        if: matrix.test
         shell: pwsh
-        run: gut/build/Release/gut.exe --help
+        run: gut/tests/test-gut.ps1
 
       - name: Stage binary
         shell: pwsh
         run: |
-          New-Item -ItemType Directory gut/dist | Out-Null
-          Copy-Item gut/build/Release/gut.exe "gut/dist/gut-windows-${{ matrix.label }}.exe"
+          New-Item -ItemType Directory gut/dist -Force | Out-Null
+          if ($env:RUNNER_OS -eq 'Windows') {
+            Copy-Item gut/build/Release/gut.exe "gut/dist/gut-${{ matrix.label }}.exe"
+          } else {
+            Copy-Item gut/build-unix/gut "gut/dist/gut-${{ matrix.label }}"
+          }
 
       - uses: actions/upload-artifact@v4
         with:
-          name: gut-windows-${{ matrix.label }}
-          path: gut/dist/gut-windows-${{ matrix.label }}.exe
+          name: gut-${{ matrix.label }}
+          path: gut/dist/gut-${{ matrix.label }}${{ runner.os == 'Windows' && '.exe' || '' }}
           if-no-files-found: error
 
   release:
     name: Release ${{ github.ref_name }}
     if: startsWith(github.ref, 'refs/tags/gut-')
     needs: build
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: gut-windows-*
+          pattern: gut-*
           merge-multiple: true
 
       - name: Create GitHub release
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" `
-            gut-windows-x64.exe gut-windows-x86.exe gut-windows-arm64.exe `
-            --title "${{ github.ref_name }}" `
-            --notes "Standalone gut.exe builds (static libgit2, no dependencies). See [gut/README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/gut/README.md) for usage."
+          gh release create "${{ github.ref_name }}" gut-* \
+            --title "${{ github.ref_name }}" \
+            --notes "Standalone gut builds (static libgit2, no dependencies). See [gut/README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/gut/README.md) for usage."
